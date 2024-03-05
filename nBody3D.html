@@ -1,0 +1,247 @@
+<html>
+
+<head>
+    <title>n body 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+
+    <script src="code.js"></script>
+</head>
+
+<body>
+
+
+    <script type="module">
+        import { OrbitControls } from 'https://cdn.skypack.dev/three@0.132.2/examples/jsm/controls/OrbitControls.js'
+        import * as THREE from 'https://cdn.skypack.dev/three@0.144.0'
+
+        const config = {
+            dimensions: 4000,
+            particles: {
+                count: 2000, 
+                radius: 3
+            },
+            rules: {},
+            rulesArray: [],
+            colors: ['#1C7C54'],
+
+            initialiseRules: () => {
+                initialiseRules()
+                randomparticles(config.particles.count, true)
+            },
+            scene: {
+                camera: null,
+                scene: null,
+                renderer: null,
+                controls: null,
+                particlesGroup: null,
+                gridHelper: null
+            }
+        }
+
+        const initialiseScene = () => {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            const aspect = window.innerWidth / window.innerHeight;
+            config.scene.camera = new THREE.PerspectiveCamera(40, aspect, 100, 5000000);
+            config.scene.camera.position.x = config.dimensions * 2;
+            config.scene.camera.position.y = config.dimensions * 2;
+            config.scene.camera.position.z = config.dimensions * 2;
+            config.scene.scene = new THREE.Scene();
+
+            config.scene.particlesGroup = new THREE.Group();
+            config.scene.scene.add(config.scene.particlesGroup);
+
+            config.scene.renderer = new THREE.WebGLRenderer();
+            config.scene.renderer.setPixelRatio(window.devicePixelRatio);
+            config.scene.renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(config.scene.renderer.domElement);
+
+            config.scene.controls = new OrbitControls(config.scene.camera, config.scene.renderer.domElement)
+            config.scene.controls.target = new THREE.Vector3(config.dimensions / 2, config.dimensions / 2, config.dimensions / 2)
+            config.scene.controls.update()
+            
+            if (config.scene.gridHelper) {
+                config.scene.gridHelper.parent.remove(config.scene.gridHelper)
+            }
+            config.scene.gridHelper = new THREE.GridHelper(config.dimensions, 10)
+            config.scene.gridHelper.position.x = config.dimensions / 2
+            config.scene.gridHelper.position.y = 0
+            config.scene.gridHelper.position.z = config.dimensions / 2
+            config.scene.scene.add(config.scene.gridHelper)
+        }
+
+
+        function initialiseRules() {
+            for (var i of config.colors) {
+                config.rules[i] = {};
+                for (var j of config.colors) {
+                    config.rules[i][j] = Math.random() * 2 - 1;
+                }
+            }
+            console.log(JSON.stringify(config.rules));
+
+            config.rulesArray = []
+            for (let i = 0; i < config.colors.length; i++) {
+                const ruleRow = []
+                for (let j = 0; j < config.colors.length; j++) {
+                    ruleRow.push(config.rules[config.colors[i]][config.colors[j]])
+                }
+                config.rulesArray.push(ruleRow)
+            }
+        }
+
+
+        function randomX() {
+            return Math.random() * (config.dimensions - 100) + 50;
+        };
+
+        function randomY() {
+            return Math.random() * (config.dimensions - 100) + 50;
+        };
+
+
+        const sphereGeom = new THREE.SphereGeometry(2, 5, 5)
+        const meshMaterials = config.colors.map(color => new THREE.MeshBasicMaterial({
+            color: color,
+            side: THREE.DoubleSide
+        }))
+
+        const create = (number, color) => {
+            for (let i = 0; i < number; i++) {
+                const particle = [randomX(), randomY(), randomX(), 0, 0, 0, color]
+                const mesh = new THREE.Mesh(sphereGeom, meshMaterials[color]);
+                mesh.position.set(particle[0], particle[1], particle[2])
+                mesh.scale.set(config.particles.radius, config.particles.radius, config.particles.radius)
+                config.scene.particlesGroup.add(mesh)
+                particle.push(mesh)
+                particles.push(particle)
+            }
+        };
+
+        function randomparticles(number_of_particles_per_color, clear_previous) {
+            if (clear_previous) {
+                particles.length = 0
+                // Clear existing particles
+                while (config.scene.particlesGroup.children.length) {
+                    config.scene.particlesGroup.remove(config.scene.particlesGroup.children[0])
+                }
+            }
+            for (let c = 0; c < config.colors.length; c++) {
+                create(number_of_particles_per_color, c)
+            }
+        }
+
+
+        // Params for click-based pulse event
+        // var pulse = 0;
+        // var pulse_x = 0,
+        //     pulse_y = 0;
+
+
+        var total_v; // global velocity as a estimate of on-screen activity
+
+        // Apply Rules ( How particles interact with each other )
+        const NewtonianImplementation = () => {
+            // update velocity first
+            for (var a of particles) {
+                let fx = 0;
+                let fy = 0;
+                let fz = 0;
+
+                for (var b of particles) {
+                    const g = -1;
+                    const dx = a[0] - b[0];
+                    const dy = a[1] - b[1];
+                    const dz = a[2] - b[2];
+
+                    const d = dx * dx + dy * dy + dz * dz;
+                    if (d > 0){
+                        const F = g * 1/d;
+                        fx += F * dx;
+                        fy += F * dy;
+                        fz += F * dz;
+                    }
+                    
+                }
+
+                const vel_multiplier = 1;
+                const max_vel = 10000;
+                
+                a[3] = Math.min((a[3] + fx) * vel_multiplier, max_vel);
+                a[4] = Math.min((a[4] + fy) * vel_multiplier, max_vel);
+                a[5] = Math.min((a[5] + fz) * vel_multiplier, max_vel);
+
+                a[0] += a[3]
+                a[1] += a[4]
+                a[2] += a[5]
+                
+            }
+            // update positions now
+            for (var a of particles) {
+                
+
+                // When particles touch or bypass canvas borders
+                if (a[0] < 0) {
+                    a[0] = -a[0];
+                    a[3] *= -0.5;
+                }
+                if (a[0] >= config.dimensions) {
+                    a[0] = 2 * config.dimensions - a[0];
+                    a[3] *= -0.5;
+                }
+                if (a[1] < 0) {
+                    a[1] = -a[1];
+                    a[4] *= -0.5;
+                }
+                if (a[1] >= config.dimensions) {
+                    a[1] = 2 * config.dimensions - a[1];
+                    a[4] *= -0.5;
+                }
+                if (a[2] < 0) {
+                    a[2] = -a[2];
+                    a[5] *= -0.5;
+                }
+                if (a[2] >= config.dimensions) {
+                    a[2] = 2 * config.dimensions - a[2];
+                    a[5] *= -0.5;
+                }
+                a[7].position.set(a[0], a[1], a[2])
+            }
+
+        };
+
+
+        initialiseRules()
+
+        initialiseScene()
+
+        const particles = []
+        randomparticles(config.particles.count, true)
+
+        console.log('config', config)
+        // Update Frames
+      
+        update();
+
+        function update() {
+            // Apply Rules
+            NewtonianImplementation()
+
+            config.scene.controls.update()
+            config.scene.renderer.render(config.scene.scene, config.scene.camera)
+
+            requestAnimationFrame(update)
+        }
+
+    </script>
+
+</body>
+
+</html>
